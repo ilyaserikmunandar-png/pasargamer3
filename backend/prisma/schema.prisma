@@ -1,0 +1,117 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum Role { BUYER SELLER ADMIN }
+enum Category { TOPUP ACCOUNT VOUCHER SERVICE }
+enum OrderStatus { PENDING_PAYMENT PAID_ESCROW DELIVERED COMPLETED RELEASED DISPUTED REFUNDED CANCELLED }
+enum TxType { TOPUP PAYMENT ESCROW_HOLD ESCROW_RELEASE REFUND WITHDRAWAL FEE }
+enum WithdrawalStatus { PENDING PROCESSING COMPLETED REJECTED }
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  email         String   @unique
+  password      String
+  name          String
+  role          Role     @default(BUYER)
+  balance       Int      @default(0)
+  heldBalance   Int      @default(0)
+  rating        Float    @default(5.0)
+  totalSold     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  products      Product[]
+  buyingOrders  Order[]  @relation("BuyerOrders")
+  sellingOrders Order[]  @relation("SellerOrders")
+  transactions  Transaction[]
+  withdrawals   Withdrawal[]
+  notifications Notification[]
+}
+
+model Game {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  slug     String    @unique
+  icon     String
+  color    String
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sellerId    String
+  gameId      String
+  title       String
+  slug        String
+  description String   @db.Text
+  price       Int
+  stock       Int
+  category    Category
+  icon        String?
+  sold        Int      @default(0)
+  rating      Float    @default(5.0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  seller   User    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  game     Game    @relation(fields: [gameId], references: [id])
+  orders   Order[]
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  orderNumber   String      @unique
+  productId     String
+  buyerId       String
+  sellerId      String
+  price         Int
+  fee           Int
+  status        OrderStatus @default(PENDING_PAYMENT)
+  credential    String?     @db.Text
+  disputeReason String?     @db.Text
+  paymentId     String?
+  paidAt        DateTime?
+  releasedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  product      Product       @relation(fields: [productId], references: [id])
+  buyer        User          @relation("BuyerOrders", fields: [buyerId], references: [id])
+  seller       User          @relation("SellerOrders", fields: [sellerId], references: [id])
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  orderId     String?
+  type        TxType
+  amount      Int
+  balance     Int
+  description String
+  createdAt   DateTime @default(now())
+  user  User   @relation(fields: [userId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id])
+}
+
+model Withdrawal {
+  id            String           @id @default(cuid())
+  userId        String
+  amount        Int
+  fee           Int
+  netAmount     Int
+  bankName      String
+  accountNumber String
+  accountName   String
+  status        WithdrawalStatus @default(PENDING)
+  createdAt     DateTime         @default(now())
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String   @db.Text
+  type      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
